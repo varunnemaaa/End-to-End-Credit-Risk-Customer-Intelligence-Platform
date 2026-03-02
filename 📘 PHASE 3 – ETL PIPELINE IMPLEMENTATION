@@ -1,0 +1,178 @@
+🎯 Objective of Phase 3
+The objective of Phase 3 was to build a modular and reproducible ETL (Extract-Transform-Load) pipeline to move raw loan data from CSV format into a structured PostgreSQL data warehouse designed in Phase 2.
+This phase converts unstructured raw data into analytics-ready, structured tables aligned with the star schema.
+________________________________________
+🧠 What We Achieved in Phase 3
+We implemented a complete ETL system consisting of:
+•	Extract Layer → Load raw CSV
+•	Transform Layer → Clean + engineer features
+•	Load Layer → Insert structured data into warehouse
+•	Modular architecture → Separate Python files
+•	Database connectivity using SQLAlchemy
+________________________________________
+🏗️ Project Structure
+credit-risk-platform/
+│
+├── etl/
+│   ├── extract.py
+│   ├── transform.py
+│   ├── load.py
+│   └── main.py
+│
+├── warehouse/
+│   └── schema.sql
+│
+├── application_train.csv
+└── notebooks/
+This structure ensures clean separation of concerns.
+________________________________________
+🔄 ETL Pipeline Explanation
+________________________________________
+1️⃣ Extract Phase
+Purpose:
+Load raw dataset into memory.
+File: extract.py
+import pandas as pd
+
+def extract_data(file_path):
+    print("Extracting data...")
+    df = pd.read_csv(file_path)
+    print(f"Data shape: {df.shape}")
+    return df
+What Happens:
+•	Reads application_train.csv
+•	Loads into Pandas DataFrame
+•	Prints dataset size
+________________________________________
+2️⃣ Transform Phase
+Purpose:
+Clean, prepare, and engineer features before loading into warehouse.
+File: transform.py
+import numpy as np
+
+def transform_data(df):
+    print("Transforming data...")
+
+    # Convert negative days to actual age
+    df["age"] = (df["DAYS_BIRTH"] / -365).astype(int)
+
+    # Handle missing income values
+    df["AMT_INCOME_TOTAL"] = df["AMT_INCOME_TOTAL"].fillna(
+        df["AMT_INCOME_TOTAL"].median()
+    )
+
+    # Remove extreme income outliers (top 1%)
+    df = df[df["AMT_INCOME_TOTAL"] < df["AMT_INCOME_TOTAL"].quantile(0.99)]
+
+    # Feature Engineering
+    df["loan_to_income"] = df["AMT_CREDIT"] / df["AMT_INCOME_TOTAL"]
+    df["emi_burden"] = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]
+
+    return df
+________________________________________
+Transformations Performed
+✅ Missing Value Handling
+•	Filled missing income values with median
+✅ Outlier Removal
+•	Removed top 1% extreme income values
+✅ Feature Engineering
+Created new derived features:
+•	loan_to_income → credit / income
+•	emi_burden → annuity / income
+•	age → derived from DAYS_BIRTH
+These improve downstream ML performance.
+________________________________________
+3️⃣ Load Phase
+Purpose:
+Insert structured data into PostgreSQL warehouse.
+File: load.py
+from sqlalchemy import create_engine
+
+def load_data(df):
+
+    engine = create_engine(
+        "postgresql+psycopg2://postgres:YOUR_PASSWORD@localhost:5432/credit_risk_db"
+    )
+
+    print("Loading dim_customer...")
+
+    dim_customer = df[[
+        "SK_ID_CURR",
+        "CODE_GENDER",
+        "NAME_EDUCATION_TYPE",
+        "NAME_FAMILY_STATUS",
+        "NAME_INCOME_TYPE",
+        "age"
+    ]].drop_duplicates()
+
+    dim_customer.columns = [
+        "customer_id",
+        "gender",
+        "education_type",
+        "family_status",
+        "employment_type",
+        "age"
+    ]
+
+    dim_customer.to_sql("dim_customer", engine, if_exists="append", index=False)
+
+    print("Loading fact_loans...")
+
+    fact_loans = df[[
+        "SK_ID_CURR",
+        "AMT_CREDIT",
+        "AMT_ANNUITY",
+        "AMT_GOODS_PRICE",
+        "TARGET"
+    ]]
+
+    fact_loans.columns = [
+        "customer_id",
+        "credit_amount",
+        "annuity_amount",
+        "goods_price",
+        "default_flag"
+    ]
+
+    fact_loans.to_sql("fact_loans", engine, if_exists="append", index=False)
+
+    print("Load completed.")
+________________________________________
+What This Does
+✅ Connects to PostgreSQL
+Using SQLAlchemy + psycopg2
+✅ Populates:
+•	dim_customer
+•	fact_loans
+✅ Maintains:
+•	Referential structure
+•	Star schema alignment
+________________________________________
+4️⃣ Pipeline Orchestration
+File: main.py
+import os
+from extract import extract_data
+from transform import transform_data
+from load import load_data
+
+if __name__ == "__main__":
+
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    file_path = os.path.join(base_path, "application_train.csv")
+
+    print("Looking for file at:", file_path)
+
+    df = extract_data(file_path)
+    df = transform_data(df)
+    load_data(df)
+________________________________________
+🔁 Execution Command
+From project root:
+python etl/main.py
+________________________________________
+🧪 Verification
+After running ETL:
+SELECT COUNT(*) FROM dim_customer;
+SELECT COUNT(*) FROM fact_loans;
+Records successfully inserted → ETL working.
+
