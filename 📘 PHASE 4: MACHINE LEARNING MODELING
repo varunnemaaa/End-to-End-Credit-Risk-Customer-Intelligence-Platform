@@ -1,0 +1,167 @@
+________________________________________
+🎯 Objective of Phase 4
+The objective of Phase 4 was to build a predictive machine learning model using structured warehouse data to identify customers likely to default on loans.
+The model was trained on data stored in a PostgreSQL star schema warehouse designed in Phase 2 and populated via ETL in Phase 3.
+This ensures:
+•	Reproducibility
+•	Structured data usage
+•	Production-like ML workflow
+•	Separation of data engineering and modeling
+________________________________________
+🧠 Business Problem
+Banks face financial loss when customers default on loans.
+The goal of this phase was to:
+Predict the probability of loan default (default_flag = 1) using customer demographic and loan features.
+This enables:
+•	Risk-based loan approval
+•	Better credit scoring
+•	Reduced financial exposure
+________________________________________
+🏗️ ML Architecture
+Data Flow:
+PostgreSQL Warehouse
+        ↓
+SQL Query (Join Fact + Dimension)
+        ↓
+Feature Engineering
+        ↓
+Train-Test Split
+        ↓
+Random Forest Model
+        ↓
+Model Evaluation (ROC-AUC, Precision, Recall)
+        ↓
+Saved Model (.pkl)
+________________________________________
+📁 Project Structure
+credit-risk-platform/
+│
+├── etl/
+├── warehouse/
+├── ml/
+│   ├── train.py
+│   └── model.pkl
+________________________________________
+🔄 Step-by-Step Implementation
+________________________________________
+1️⃣ Data Extraction from Warehouse
+Instead of training on CSV, the model reads structured data from PostgreSQL.
+Code (ml/train.py)
+import pandas as pd
+import joblib
+from sqlalchemy import create_engine
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# ----------------------------
+# STEP 1: Connect to PostgreSQL
+# ----------------------------
+engine = create_engine(
+    "postgresql+psycopg2://postgres:YOUR_PASSWORD@localhost:5432/credit_risk_db"
+)
+
+print("Loading data from warehouse...")
+
+query = """
+SELECT 
+    f.credit_amount,
+    f.annuity_amount,
+    f.goods_price,
+    d.age,
+    f.default_flag
+FROM fact_loans f
+JOIN dim_customer d
+ON f.customer_id = d.customer_id
+"""
+
+df = pd.read_sql(query, engine)
+
+print("Data loaded:", df.shape)
+________________________________________
+2️⃣ Feature Preparation
+We define:
+•	X → Features
+•	y → Target variable
+X = df.drop("default_flag", axis=1)
+y = df["default_flag"]
+________________________________________
+3️⃣ Train-Test Split
+Stratified splitting is used to preserve class imbalance distribution.
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+________________________________________
+4️⃣ Model Selection
+We used a Random Forest Classifier due to:
+•	Robustness
+•	Handling of non-linear patterns
+•	Resistance to overfitting
+•	Strong baseline performance
+print("Training Random Forest model...")
+
+model = RandomForestClassifier(
+    n_estimators=100,
+    class_weight="balanced",
+    random_state=42
+)
+
+model.fit(X_train, y_train)
+The class_weight="balanced" parameter was used to address severe class imbalance (~92% non-default vs ~8% default).
+________________________________________
+5️⃣ Model Evaluation
+Predictions
+y_pred = model.predict(X_test)
+y_prob = model.predict_proba(X_test)[:, 1]
+Classification Report
+print("\nClassification Report:\n")
+print(classification_report(y_test, y_pred))
+Metrics reported:
+•	Precision
+•	Recall
+•	F1-score
+•	Support
+ROC-AUC Score
+print("ROC-AUC Score:", roc_auc_score(y_test, y_prob))
+ROC-AUC is preferred in credit risk because it evaluates ranking performance rather than simple accuracy.
+________________________________________
+6️⃣ Confusion Matrix Visualization
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(5,4))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.title("Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.show()
+This helps analyze:
+•	False Positives
+•	False Negatives
+•	Model sensitivity to defaulters
+________________________________________
+7️⃣ Feature Importance
+feature_importance = pd.DataFrame({
+    "feature": X.columns,
+    "importance": model.feature_importances_
+}).sort_values(by="importance", ascending=False)
+
+print(feature_importance)
+This identifies which variables most influence default prediction.
+Typical important features include:
+•	Loan amount
+•	Age
+•	Loan-to-income ratio
+•	EMI burden
+________________________________________
+8️⃣ Model Persistence
+The trained model is saved for deployment.
+joblib.dump(model, "ml/model.pkl")
+
+print("Model saved successfully.")
+This allows:
+•	API deployment
+•	Future retraining
+•	Reusability
+
