@@ -1,0 +1,9 @@
+CSV Data
+   ↓
+Python ETL Pipeline
+   ↓
+PostgreSQL Data Warehouse
+   ↓
+Machine Learning Model
+   ↓
+Power BI Dashboard
