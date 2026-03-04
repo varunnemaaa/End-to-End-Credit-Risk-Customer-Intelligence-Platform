@@ -140,6 +140,11 @@ The final model generates a probability-based risk score for each borrower.
 
 📊 Business Intelligence Dashboard
 
+<img width="1280" height="718" alt="image" src="https://github.com/user-attachments/assets/b3ec833e-3245-4db8-9f66-4c6018accaea" />
+<img width="1278" height="719" alt="image" src="https://github.com/user-attachments/assets/53ca58ca-7127-43f0-a0e8-b86c1ed2dc1a" />
+
+
+
 An interactive Power BI dashboard was developed to provide strategic insights:
 
 Executive Overview
